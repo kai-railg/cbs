@@ -25,7 +25,7 @@ class Node(object):
     def __init__(self, x: float, y: float, idx: int, node_ids: List):
         self.x = x
         self.y = y
-        self.to_ids = [(n, 1) for n in node_ids]
+        self.to_ids = [(n, 1) for n in node_ids] + [(idx, 1)]
         self.idx = idx
 
     def __lt__(self, other):
@@ -58,9 +58,16 @@ class GenTestGraph(object):
                 # 左边
                 elif j < self.master_lane:
                     direct = ((-1, 0), (1, 0), (0, - 1), (0, 1))  # 上下左右
+                # 左边
+                elif j == self.master_lane:
+                    direct = ((-1, 0), (1, 0), (0, - 1), None)  # 上下左右
                 # 右边
                 elif j > max_idx - self.master_lane:
                     direct = ((-1, 0), (1, 0), (0, - 1), (0, 1))  # 上下左右
+                # 右边
+                elif j == max_idx - self.master_lane:
+                    direct = ((-1, 0), (1, 0), None, (0, 1))  # 上下左右
+
                 # 堆场里的
                 else:
                     direct = ((-1, 0), (1, 0), None, None)
@@ -88,7 +95,7 @@ class GenTestGraph(object):
                 raise
             # print(node.idx, node.x, node.y, node.node_ids)
 
-    def draw(self, paths: List[List[int]]):
+    def draw(self, paths: List[List[int]], wait_time=500):
         # cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
         # cv2.resizeWindow('frame', 1280, 720)
         long = int(len(self.graph) ** 0.5)
@@ -99,7 +106,21 @@ class GenTestGraph(object):
 
         for node in self.graph:
             x, y = node.x, node.y
+            center = (x * c, y * c)
             cv2.circle(frame, (x * c, y * c), c, (224, 224, 224), -1)
+
+            # 在圆上放置文本
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 1
+            font_thickness = 2
+            text = str(node.idx)
+            text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+
+            # 计算文本的位置，使其位于圆心的附近
+            text_position = (center[0] - text_size[0] // 2, center[1] + text_size[1] // 2)
+
+            cv2.putText(frame, text, text_position, font, font_scale, (90, 90, 90), font_thickness, cv2.LINE_AA)
+
             for node_id, weight in node.to_ids:
                 near_node = self.graph[node_id]
                 cv2.line(frame, (x * c, y * c), (near_node.x * c, near_node.y * c), (0, 0, 0), 2)
@@ -127,7 +148,7 @@ class GenTestGraph(object):
                 cv2.waitKey(0)
                 wait = False
 
-            k = cv2.waitKey(500) & 0xFF
+            k = cv2.waitKey(wait_time) & 0xFF
             if k == ord('q'):
                 break
             j += 1
@@ -168,12 +189,14 @@ class Dijkstra(object):
                 continue
             for node_id, w in u.to_ids:
                 v = graph[node_id]
-                if v.idx in ct.agent_constraints[count] or \
-                        v.idx in ct.agent_constraints[count + 1]:
+                # if u.idx == 69 and v.idx == 68:
+                #     print(dist[u.idx], dist[v.idx])
+                #     print(node_id, v.idx in ct.agent_constraints[count], ct.obstacle.get(v.idx) and count > ct.obstacle[v.idx])
+                if v.idx in ct.agent_constraints[count]:
                     continue
                 if ct.obstacle.get(v.idx) and count > ct.obstacle[v.idx]:
                     continue
-                if dist[u.idx] + w < dist[v.idx]:
+                if dist[u.idx] + w <= dist[v.idx]:
                     dist[v.idx] = dist[u.idx] + w
                     prev[v.idx] = (u, w, count + 1)
                     heapq.heappush(pq, (dist[v.idx], v, count + 1))
@@ -233,7 +256,7 @@ class CBS(object):
     def __init__(self, graph):
         self.dij = Dijkstra()
         self.graph = graph
-        self.max_iter = 200
+        self.max_iter = 1000
         self.max_process = 10
 
     def plan(self, agents: List):
@@ -307,16 +330,21 @@ class CBS(object):
         if ai is None:
             results.append((best,))
             return
-
-        at_i = best.constraints.fork(window)
-        window2 = self.safe_distance(best.solution[aj], best.solution[ai])[2]
-        at_j = best.constraints.fork(window2)
+        at_i, at_j = best.constraints, best.constraints
+        if window:
+            at_i = best.constraints.fork(window)
+            window2 = self.safe_distance(best.solution[aj], best.solution[ai])[2]
+            at_j = best.constraints.fork(window2)
 
         best.constraints.rebuild_obstacle(best, ai)
         path1 = self.dij.dijkstra(self.graph, *ai, at_i)[1]
+        if path1[0] == 1:
+            print(f"path1: {path1}")
 
         best.constraints.rebuild_obstacle(best, aj)
         path2 = self.dij.dijkstra(self.graph, *aj, at_j)[1]
+        if path2[0] == 1:
+            print(f"path2: {path2}")
         # print(path1, ai, window)
         # print(path2, aj, window2)
 
@@ -337,13 +365,13 @@ class CBS(object):
         results.append((node_i, node_j))
 
     def validate_paths(self, node: CTNode):
-        agents = list(node.solution.keys())
-        for i in range(len(agents)):
-            for j in range(i + 1, len(agents)):
-                ai, aj = agents[i], agents[j]
-                start_conflict, end_conflict, window = self.safe_distance(node.solution[ai], node.solution[aj])
-                if start_conflict != -1:
-                    return ai, aj, start_conflict, end_conflict, window
+        agents = sorted(node.solution.items(), key=lambda x: len(x[1]), reverse=True)
+        agents = [agent[0] for agent in agents]
+        for ai, aj in combinations(agents, 2):
+            start_conflict, end_conflict, window = self.safe_distance(node.solution[ai], node.solution[aj])
+
+            if start_conflict != -1:
+                return ai, aj, start_conflict, end_conflict, window
         return None, None, -1, -1, {}
 
     def safe_distance(self, p1, p2) -> Tuple:
@@ -368,28 +396,41 @@ class CBS(object):
                     end = i
             else:
                 break
+        if start != -1 and end == -1:
+            start = -1
 
         if start != -1:
             window = {i: conflict[i] for i in range(start, end)}
+
+        # 车辆到达后的冲突
+        if len(p1) > len(p2):
+            for i in range(len(p2), len(p1)):
+                if p1[i] == p2[-1]:
+                    start = 1
+                    end = p1[i]
+        if p1[0] == 1 and start == 1:
+            print(f"conflict range: {window, start, end, p1, p2}")
         return start, end, window
 
 
 if __name__ == '__main__':
     """
-    使用cbs
+    解决已有路径的问题
     """
     obj = GenTestGraph()
     obj.gen_graph()
     cbs = CBS(obj.graph)
-    se = [(1, 195), (13, 1), (187, 21), (33, 187)]
-    # se = [(1, 195), (13, 1), (187, 21), (33, 187), (100, 194), (23, 191)]
-    se = [
-        (1, 195), (13, 1), (187, 21), (33, 167),
-        (100, 194), (23, 182), (55, 77), (67, 188),
-        (28, 178), (70, 163)
-    ]
+    se = [(1, 195), (13, 1), (187, 21), (33, 187), (14, 28), (27, 29), (140, 30), (181, 182), (155, 124), (165, 83), ]
+    se = [(1, 195), (13, 1), (187, 21), (33, 187), (14, 28), (27, 29), (181, 182), (155, 124), (165, 83), ]
+    se = [(1, 195), (13, 1), (187, 21), (33, 187), (14, 28), (27, 29), (140, 30), (155, 124), (165, 83), ]
+    se = [(1, 195), (13, 1), (187, 21), (33, 187), (14, 28), (27, 29), (181, 182), (140, 30), (155, 124), (165, 83), ]
+    # se = [
+    #     (1, 195), (13, 1), (187, 21), (33, 167),
+    #     (100, 194), (23, 182), (55, 77), (67, 188),
+    #     (28, 178), (70, 163)
+    # ]
     node: CTNode = cbs.plan(se)
     result = list(node.solution.values())
     for r in result:
         print(r)
-    obj.draw(result)
+    obj.draw(result, wait_time=1000)

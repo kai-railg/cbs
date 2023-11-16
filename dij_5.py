@@ -88,7 +88,7 @@ class GenTestGraph(object):
                 raise
             # print(node.idx, node.x, node.y, node.node_ids)
 
-    def draw(self, paths: List[List[int]]):
+    def draw(self, paths: List[List[int]], wait_time=500):
         # cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
         # cv2.resizeWindow('frame', 1280, 720)
         long = int(len(self.graph) ** 0.5)
@@ -127,7 +127,7 @@ class GenTestGraph(object):
                 cv2.waitKey(0)
                 wait = False
 
-            k = cv2.waitKey(500) & 0xFF
+            k = cv2.waitKey(wait_time) & 0xFF
             if k == ord('q'):
                 break
             j += 1
@@ -168,8 +168,7 @@ class Dijkstra(object):
                 continue
             for node_id, w in u.to_ids:
                 v = graph[node_id]
-                if v.idx in ct.agent_constraints[count] or \
-                        v.idx in ct.agent_constraints[count + 1]:
+                if v.idx in ct.agent_constraints[count]:
                     continue
                 if ct.obstacle.get(v.idx) and count > ct.obstacle[v.idx]:
                     continue
@@ -307,10 +306,11 @@ class CBS(object):
         if ai is None:
             results.append((best,))
             return
-
-        at_i = best.constraints.fork(window)
-        window2 = self.safe_distance(best.solution[aj], best.solution[ai])[2]
-        at_j = best.constraints.fork(window2)
+        at_i, at_j = best.constraints, best.constraints
+        if window:
+            at_i = best.constraints.fork(window)
+            window2 = self.safe_distance(best.solution[aj], best.solution[ai])[2]
+            at_j = best.constraints.fork(window2)
 
         best.constraints.rebuild_obstacle(best, ai)
         path1 = self.dij.dijkstra(self.graph, *ai, at_i)[1]
@@ -337,13 +337,13 @@ class CBS(object):
         results.append((node_i, node_j))
 
     def validate_paths(self, node: CTNode):
-        agents = list(node.solution.keys())
-        for i in range(len(agents)):
-            for j in range(i + 1, len(agents)):
-                ai, aj = agents[i], agents[j]
-                start_conflict, end_conflict, window = self.safe_distance(node.solution[ai], node.solution[aj])
-                if start_conflict != -1:
-                    return ai, aj, start_conflict, end_conflict, window
+        agents = sorted(node.solution.items(), key=lambda x: len(x[1]), reverse=True)
+        agents = [agent[0] for agent in agents]
+        for ai, aj in combinations(agents, 2):
+            start_conflict, end_conflict, window = self.safe_distance(node.solution[ai], node.solution[aj])
+
+            if start_conflict != -1:
+                return ai, aj, start_conflict, end_conflict, window
         return None, None, -1, -1, {}
 
     def safe_distance(self, p1, p2) -> Tuple:
@@ -371,17 +371,25 @@ class CBS(object):
 
         if start != -1:
             window = {i: conflict[i] for i in range(start, end)}
+
+        # 车辆到达后的冲突
+        if len(p1) > len(p2):
+            for i in range(len(p2), len(p1)):
+                if p1[i] == p2[-1]:
+                    start = 1
+
         return start, end, window
 
 
 if __name__ == '__main__':
     """
-    使用cbs
+    解决已有路径的问题
     """
     obj = GenTestGraph()
     obj.gen_graph()
     cbs = CBS(obj.graph)
-    se = [(1, 195), (13, 1), (187, 21), (33, 187)]
+    se = [(1, 195), (13, 1), (187, 21), (33, 187), (14, 28), (27, 29), (140, 30), (100, 181)]
+    se = [(1, 195), (13, 1), (187, 21), (33, 187), (14, 28), (27, 29), (140, 30), (100, 181)]
     # se = [(1, 195), (13, 1), (187, 21), (33, 187), (100, 194), (23, 191)]
     se = [
         (1, 195), (13, 1), (187, 21), (33, 167),
@@ -392,4 +400,4 @@ if __name__ == '__main__':
     result = list(node.solution.values())
     for r in result:
         print(r)
-    obj.draw(result)
+    obj.draw(result, wait_time=1000)
