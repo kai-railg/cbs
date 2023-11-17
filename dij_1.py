@@ -106,7 +106,7 @@ class GenTestGraph(object):
         for idx, path in enumerate(paths):
             color = self.assign_colour(idx)
             cv2.circle(frame, (self.graph[path[0]].x * c, self.graph[path[0]].y * c), c, color, -1)
-            cv2.circle(frame, (self.graph[path[-1]].x * c, self.graph[path[-1]].y * c), c, color, -1)
+            cv2.circle(frame, (self.graph[path[-1]].x * c, self.graph[path[-1]].y * c), c, color, 10)
 
         while True:
 

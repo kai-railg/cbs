@@ -108,18 +108,18 @@ class GenTestGraph(object):
             x, y = node.x, node.y
             center = (x * c, y * c)
             cv2.circle(frame, (x * c, y * c), c, (224, 224, 224), -1)
-
-            # 在圆上放置文本
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 1
-            font_thickness = 2
-            text = str(node.idx)
-            text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
-
-            # 计算文本的位置，使其位于圆心的附近
-            text_position = (center[0] - text_size[0] // 2, center[1] + text_size[1] // 2)
-
-            cv2.putText(frame, text, text_position, font, font_scale, (90, 90, 90), font_thickness, cv2.LINE_AA)
+            #
+            # # 在圆上放置文本
+            # font = cv2.FONT_HERSHEY_SIMPLEX
+            # font_scale = 1
+            # font_thickness = 2
+            # text = str(node.idx)
+            # text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+            #
+            # # 计算文本的位置，使其位于圆心的附近
+            # text_position = (center[0] - text_size[0] // 2, center[1] + text_size[1] // 2)
+            #
+            # cv2.putText(frame, text, text_position, font, font_scale, (90, 90, 90), font_thickness, cv2.LINE_AA)
 
             for node_id, weight in node.to_ids:
                 near_node = self.graph[node_id]
@@ -130,7 +130,7 @@ class GenTestGraph(object):
         for idx, path in enumerate(paths):
             color = self.assign_colour(idx)
             cv2.circle(frame, (self.graph[path[0]].x * c, self.graph[path[0]].y * c), c, color, -1)
-            cv2.circle(frame, (self.graph[path[-1]].x * c, self.graph[path[-1]].y * c), c, color, -1)
+            cv2.circle(frame, (self.graph[path[-1]].x * c, self.graph[path[-1]].y * c), c, color, 10)
 
         while True:
 
