@@ -85,7 +85,7 @@ class GenTestGraph(object):
                 raise
             # print(node.idx, node.x, node.y, node.node_ids)
 
-    def draw(self, paths: List[List[int]]):
+    def draw(self, paths: List[List[int]], wait_status):
         # cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
         # cv2.resizeWindow('frame', 1280, 720)
         long = int(len(self.graph) ** 0.5)
@@ -104,7 +104,9 @@ class GenTestGraph(object):
 
         # 绘制单车
         for idx, path in enumerate(paths):
-            cv2.circle(frame, (self.graph[path[0]].x * c, self.graph[path[0]].y * c), c, self.assign_colour(idx), -1)
+            color = self.assign_colour(idx)
+            cv2.circle(frame, (self.graph[path[0]].x * c, self.graph[path[0]].y * c), c, color, -1)
+            cv2.circle(frame, (self.graph[path[-1]].x * c, self.graph[path[-1]].y * c), c, color, -1)
 
         while True:
 
@@ -120,13 +122,19 @@ class GenTestGraph(object):
 
             frame = deepcopy(frame)
             cv2.imshow('frame', frame)
-            if wait:
-                cv2.waitKey(0)
-                wait = False
+            if wait_status == 1:
+                if wait:
+                    cv2.waitKey(0)
+                    wait = False
 
-            k = cv2.waitKey(300) & 0xFF
-            if k == ord('q'):
-                break
+                    k = cv2.waitKey(500) & 0xFF
+                    if k == ord('q'):
+                        break
+            elif wait_status == 0:
+                k = cv2.waitKey(0) & 0xFF
+                if k == ord('q'):
+                    break
+
             j += 1
 
     def assign_colour(self, x):
@@ -203,4 +211,4 @@ if __name__ == '__main__':
         if result[1]:
             paths.append(result[1])
         print(result)
-    obj.draw(paths)
+    obj.draw(paths, 0)

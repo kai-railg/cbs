@@ -88,7 +88,7 @@ class GenTestGraph(object):
                 raise
             # print(node.idx, node.x, node.y, node.node_ids)
 
-    def draw(self, paths: List[List[int]], wait_time=500):
+    def draw(self, paths: List[List[int]], wait_status):
         # cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
         # cv2.resizeWindow('frame', 1280, 720)
         long = int(len(self.graph) ** 0.5)
@@ -107,7 +107,9 @@ class GenTestGraph(object):
 
         # 绘制单车
         for idx, path in enumerate(paths):
-            cv2.circle(frame, (self.graph[path[0]].x * c, self.graph[path[0]].y * c), c, self.assign_colour(idx), -1)
+            color = self.assign_colour(idx)
+            cv2.circle(frame, (self.graph[path[0]].x * c, self.graph[path[0]].y * c), c, color, -1)
+            cv2.circle(frame, (self.graph[path[-1]].x * c, self.graph[path[-1]].y * c), c, color, -1)
 
         while True:
 
@@ -123,13 +125,19 @@ class GenTestGraph(object):
 
             frame = deepcopy(frame)
             cv2.imshow('frame', frame)
-            if wait:
-                cv2.waitKey(0)
-                wait = False
+            if wait_status == 1:
+                if wait:
+                    cv2.waitKey(0)
+                    wait = False
 
-            k = cv2.waitKey(wait_time) & 0xFF
-            if k == ord('q'):
-                break
+                    k = cv2.waitKey(500) & 0xFF
+                    if k == ord('q'):
+                        break
+            elif wait_status == 0:
+                k = cv2.waitKey(0) & 0xFF
+                if k == ord('q'):
+                    break
+
             j += 1
 
     def assign_colour(self, x):
@@ -172,7 +180,7 @@ class Dijkstra(object):
                     continue
                 if ct.obstacle.get(v.idx) and count > ct.obstacle[v.idx]:
                     continue
-                if dist[u.idx] + w < dist[v.idx]:
+                if dist[u.idx] + w <= dist[v.idx]:
                     dist[v.idx] = dist[u.idx] + w
                     prev[v.idx] = (u, w, count + 1)
                     heapq.heappush(pq, (dist[v.idx], v, count + 1))
@@ -391,13 +399,13 @@ if __name__ == '__main__':
     se = [(1, 195), (13, 1), (187, 21), (33, 187), (14, 28), (27, 29), (140, 30), (100, 181)]
     se = [(1, 195), (13, 1), (187, 21), (33, 187), (14, 28), (27, 29), (140, 30), (100, 181)]
     # se = [(1, 195), (13, 1), (187, 21), (33, 187), (100, 194), (23, 191)]
-    se = [
-        (1, 195), (13, 1), (187, 21), (33, 167),
-        (100, 194), (23, 182), (55, 77), (67, 188),
-        (28, 178), (70, 163)
-    ]
+    # se = [
+    #     (1, 195), (13, 1), (187, 21), (33, 167),
+    #     (100, 194), (23, 182), (55, 77), (67, 188),
+    #     (28, 178), (70, 163)
+    # ]
     node: CTNode = cbs.plan(se)
     result = list(node.solution.values())
     for r in result:
         print(r)
-    obj.draw(result, wait_time=1000)
+    obj.draw(result, wait_status=0)
